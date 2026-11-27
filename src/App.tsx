@@ -189,7 +189,16 @@ function demoApi(path: string, options: RequestInit) {
   const body = options.body ? JSON.parse(String(options.body)) : {};
 
   if (path === "/dashboard") {
-    return { products: demoProducts.length, units: demoProducts.reduce((total, product) => total + product.stock, 0), low: demoProducts.filter((product) => product.stock < product.minimumStock).length, expiring: demoLots.filter((lot) => lot.days <= 30).length };
+    return {
+      products: demoProducts.length,
+      units: demoProducts.reduce((total, product) => total + product.stock, 0),
+      low: demoProducts.filter((product) => product.stock < product.minimumStock).length,
+      expiring: demoLots.filter((lot) => lot.days <= 30).length,
+      pendingAlerts: demoAlerts.filter((alert)=>alert.status==="Pendiente").length,
+      alerts: demoAlerts.filter((alert)=>alert.status==="Pendiente").slice(0,3).map((alert)=>({...alert,createdAt:alert.createdAt})),
+      recent: demoMovements.slice(0,5),
+      daily: demoMovements.map((movement)=>({day:movement.created_at,entries:movement.movement_type==="Entrada"?movement.quantity:0,exits:movement.movement_type==="Salida"?movement.quantity:0})),
+    };
   }
   if (path === "/products" && method === "GET") return demoProducts;
   if (path === "/products" && method === "POST") {
@@ -245,8 +254,8 @@ function demoApi(path: string, options: RequestInit) {
   throw new ApiError("Esta operación no está disponible en el modo de demostración.", 404);
 }
 
-function Button({ children, variant = "primary", onClick, icon }: { children: React.ReactNode; variant?: "primary" | "secondary" | "ghost"; onClick?: () => void; icon?: IconName }) {
-  return <button className={`btn btn-${variant}`} onClick={onClick}>{icon && <Icon name={icon} size={17}/>}<span>{children}</span></button>;
+function Button({ children, variant = "primary", onClick, icon, disabled = false, type = "button" }: { children: React.ReactNode; variant?: "primary" | "secondary" | "ghost"; onClick?: () => void; icon?: IconName; disabled?: boolean; type?: "button" | "submit" }) {
+  return <button type={type} className={`btn btn-${variant}`} onClick={onClick} disabled={disabled}>{icon && <Icon name={icon} size={17}/>}<span>{children}</span></button>;
 }
 
 function Badge({ children, tone = "neutral" }: { children: React.ReactNode; tone?: string }) {
@@ -259,6 +268,14 @@ function Header({ title, description, action }: { title: string; description: st
 
 function DataTable({ children, headers }: { children: React.ReactNode; headers: string[] }) {
   return <div className="table-wrap"><table><thead><tr>{headers.map((h) => <th key={h}>{h}</th>)}</tr></thead><tbody>{children}</tbody></table></div>;
+}
+
+function EmptyRow({ columns, message = "No se encontraron resultados para los filtros seleccionados." }: { columns: number; message?: string }) {
+  return <tr><td className="table-empty" colSpan={columns}><Icon name="search" size={22}/><span>{message}</span></td></tr>;
+}
+
+function FilterSelect({ value, onChange, label, children }: { value: string; onChange: (value: string) => void; label: string; children: React.ReactNode }) {
+  return <label className="filter-select"><span className="sr-only">{label}</span><select aria-label={label} value={value} onChange={event=>onChange(event.target.value)}>{children}</select><Icon name="chevron" size={14}/></label>;
 }
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
@@ -320,8 +337,19 @@ function Login({ onLogin }: { onLogin: (account: Account, token: string) => void
 }
 
 function Dashboard({ setPage, openMovement, account }: { setPage: (p: string) => void; openMovement: () => void; account: Account }) {
-  const [metrics,setMetrics]=useState({products:128,units:4862,low:2,expiring:1});
-  useEffect(()=>{api<typeof metrics>("/dashboard").then(setMetrics).catch(()=>{});},[]);
+  const [metrics,setMetrics]=useState<any>({products:0,units:0,low:0,expiring:0,pendingAlerts:0,alerts:[],recent:[],daily:[]});
+  const [loading,setLoading]=useState(true);
+  useEffect(()=>{api<any>("/dashboard").then(data=>setMetrics((current:any)=>({...current,...data}))).finally(()=>setLoading(false));},[]);
+  const chart = useMemo(()=>{
+    const rows = Array.from({length:7},(_,index)=>{
+      const date=new Date(); date.setDate(date.getDate()-(6-index));
+      const key=date.toISOString().slice(0,10);
+      const item=(metrics.daily||[]).find((row:any)=>String(row.day).slice(0,10)===key);
+      return {d:date.toLocaleDateString("es-CL",{weekday:"short"}).replace(".",""),a:Number(item?.entries||0),b:Number(item?.exits||0)};
+    });
+    const max=Math.max(1,...rows.flatMap(row=>[row.a,row.b]));
+    return rows.map(row=>({...row,ah:Math.max(row.a?8:0,(row.a/max)*100),bh:Math.max(row.b?8:0,(row.b/max)*100)}));
+  },[metrics.daily]);
   return <>
     <Header title={`Buenos días, ${account.name.split(" ")[0]}`} description={`Vista de ${account.role.toLowerCase()} · Estado del inventario de Clínica Dental Maró.`} action={["Administrador","Encargado de Bodega"].includes(account.role)&&<Button icon="plus" onClick={openMovement}>Registrar movimiento</Button>}/>
     <div className="stats-grid">
@@ -330,154 +358,205 @@ function Dashboard({ setPage, openMovement, account }: { setPage: (p: string) =>
         { label: "Unidades disponibles", value: Number(metrics.units).toLocaleString("es-CL"), note: "Stock no vencido", icon: "layers", tone: "blue" },
         { label: "Bajo stock mínimo", value: String(metrics.low), note: "Requieren reposición", icon: "alert", tone: "red" },
         { label: "Próximos a vencer", value: String(metrics.expiring), note: "En el período configurado", icon: "clock", tone: "amber" },
-      ].map((s) => <div className="stat-card" key={s.label}><div className={`stat-icon ${s.tone}`}><Icon name={s.icon as IconName}/></div><div className="stat-value">{s.value}</div><div className="stat-label">{s.label}</div><div className={`stat-note ${s.tone}`}>{s.note}</div></div>)}
+      ].map((s) => <button className="stat-card" key={s.label} onClick={()=>setPage(s.label==="Productos activos"||s.label==="Unidades disponibles"?"Productos":s.label==="Bajo stock mínimo"?"Productos":"Lotes y vencimientos")}><div className={`stat-icon ${s.tone}`}><Icon name={s.icon as IconName}/></div><div className="stat-value">{loading?"—":s.value}</div><div className="stat-label">{s.label}</div><div className={`stat-note ${s.tone}`}>{s.note}</div></button>)}
     </div>
     <div className="dashboard-grid">
       <section className="panel chart-panel">
         <div className="panel-head"><div><h2>Movimientos de inventario</h2><p>Entradas y salidas de los últimos 7 días</p></div><Badge>Últimos 7 días</Badge></div>
         <div className="chart-legend"><span><i className="dot green-dot"/>Entradas</span><span><i className="dot blue-dot"/>Salidas</span></div>
         <div className="bar-chart">
-          {[{d:"Lun",a:52,b:32},{d:"Mar",a:65,b:41},{d:"Mié",a:43,b:58},{d:"Jue",a:78,b:36},{d:"Vie",a:62,b:49},{d:"Sáb",a:34,b:21},{d:"Dom",a:46,b:28}].map(x=><div className="bar-group" key={x.d}><div className="bars"><i className="bar in" style={{height:`${x.a}%`}}/><i className="bar out" style={{height:`${x.b}%`}}/></div><span>{x.d}</span></div>)}
+          {chart.map(x=><div className="bar-group" key={x.d}><div className="bars"><i className="bar in" title={`${x.a} entradas`} style={{height:`${x.ah}%`}}/><i className="bar out" title={`${x.b} salidas`} style={{height:`${x.bh}%`}}/></div><span>{x.d}</span></div>)}
         </div>
       </section>
       <section className="panel alert-panel">
         <div className="panel-head"><div><h2>Alertas activas</h2><p>Requieren tu atención</p></div><button className="text-link" onClick={() => setPage("Alertas")}>Ver todas <Icon name="chevron" size={15}/></button></div>
-        <div className="alert-list">
-          <div className="alert-row"><span className="alert-icon danger"><Icon name="arrowDown"/></span><div><strong>Stock bajo</strong><p>Suero fisiológico 0,9%</p><small>25 disponibles · mínimo 40</small></div><Badge tone="danger">Crítica</Badge></div>
-          <div className="alert-row"><span className="alert-icon warning"><Icon name="clock"/></span><div><strong>Vencimiento próximo</strong><p>Guantes de nitrilo</p><small>Lote GN-2026-03 · 20 días</small></div><Badge tone="warning">Atención</Badge></div>
-          <div className="alert-row"><span className="alert-icon danger"><Icon name="arrowDown"/></span><div><strong>Stock bajo</strong><p>Anestesia dental</p><small>18 disponibles · mínimo 30</small></div><Badge tone="danger">Crítica</Badge></div>
-        </div>
+        <div className="alert-list">{(metrics.alerts||[]).map((item:any)=><div className="alert-row" key={item.id}><span className={`alert-icon ${item.type==="Stock mínimo"?"danger":"warning"}`}><Icon name={item.type==="Stock mínimo"?"arrowDown":"clock"}/></span><div><strong>{item.type}</strong><p>{item.product}</p><small>{item.message}</small></div><Badge tone={item.type==="Stock mínimo"?"danger":"warning"}>{item.type==="Stock mínimo"?"Crítica":"Atención"}</Badge></div>)}{!loading&&!metrics.alerts?.length&&<div className="compact-empty"><Icon name="check"/><span>Sin alertas pendientes</span></div>}</div>
       </section>
     </div>
     <section className="panel recent-panel">
       <div className="panel-head"><div><h2>Actividad reciente</h2><p>Últimos movimientos registrados</p></div><button className="text-link" onClick={() => setPage("Movimientos")}>Ver historial <Icon name="chevron" size={15}/></button></div>
       <DataTable headers={["Movimiento", "Producto", "Tipo", "Cantidad", "Fecha", "Responsable"]}>
-        {movements.slice(0,4).map(m=><tr key={m.id}><td className="code">{m.id}</td><td><strong>{m.product}</strong></td><td><Badge tone={m.type==="Entrada"?"success":m.type==="Salida"?"info":"neutral"}>{m.type}</Badge></td><td className={m.type==="Entrada"?"positive":"negative"}>{m.type==="Entrada"?"+":"−"}{m.qty}</td><td>{m.date}</td><td>{m.user}</td></tr>)}
+        {(metrics.recent||[]).map((m:any)=><tr key={m.id}><td className="code">#MOV-{m.id}</td><td><strong>{m.product_name}</strong><small>{m.lot_number}</small></td><td><Badge tone={m.movement_type==="Entrada"?"success":m.movement_type==="Salida"?"info":"neutral"}>{m.movement_type}</Badge></td><td className={["Entrada","Ajuste positivo"].includes(m.movement_type)?"positive":"negative"}>{["Entrada","Ajuste positivo"].includes(m.movement_type)?"+":"−"}{m.quantity}</td><td>{new Date(m.created_at).toLocaleString("es-CL")}</td><td>{m.user_name}</td></tr>)}
+        {!loading&&!metrics.recent?.length&&<EmptyRow columns={6} message="Todavía no hay movimientos registrados."/>}
       </DataTable>
     </section>
   </>;
 }
 
 function Products({ query, setQuery, onAdd, canEdit, version }: { query: string; setQuery: (q: string) => void; onAdd: () => void; canEdit: boolean; version: number }) {
-  const [products,setProducts] = useState(initialProducts);
+  const [products,setProducts] = useState<any[]>(authToken.startsWith("demo:")?initialProducts:[]);
+  const [category,setCategory]=useState("Todas");
+  const [stockState,setStockState]=useState("Todos");
   useEffect(()=>{api<any[]>("/products").then(rows=>setProducts(rows.map(p=>({...p,min:p.minimumStock,status:p.stock<p.minimumStock?"low":"ok"})))).catch(()=>{});},[version]);
-  const filtered = products.filter(p => p.name.toLowerCase().includes(query.toLowerCase()) || p.code.toLowerCase().includes(query.toLowerCase()));
+  const categories=useMemo(()=>Array.from(new Set(products.map(product=>product.category))).sort(),[products]);
+  const filtered = products.filter(p => (p.name.toLowerCase().includes(query.toLowerCase()) || p.code.toLowerCase().includes(query.toLowerCase()))&&(category==="Todas"||p.category===category)&&(stockState==="Todos"||(stockState==="Bajo"&&p.status==="low")||(stockState==="Disponible"&&p.status==="ok")));
   return <>
     <Header title="Productos" description={canEdit?"Administra el catálogo de insumos clínicos y sus niveles de stock.":"Consulta el catálogo de insumos clínicos y sus niveles de stock."} action={canEdit&&<Button icon="plus" onClick={onAdd}>Nuevo producto</Button>}/>
-    <section className="panel"><div className="toolbar"><label className="search-field"><Icon name="search" size={18}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar por nombre o código..."/></label><Button variant="secondary">Todos los productos</Button></div>
-      <DataTable headers={["Código", "Producto", "Categoría", "Stock actual", "Stock mínimo", "Estado", ""]}>
-        {filtered.map(p=><tr key={p.code}><td className="code">{p.code}</td><td><strong>{p.name}</strong><small>{p.unit}</small></td><td>{p.category}</td><td><strong>{p.stock}</strong></td><td>{p.min}</td><td><Badge tone={p.status==="low"?"danger":"success"}>{p.status==="low"?"Bajo stock":"Disponible"}</Badge></td><td><button className="icon-btn"><Icon name="more"/></button></td></tr>)}
+    <section className="panel"><div className="toolbar"><label className="search-field"><Icon name="search" size={18}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar por nombre o código..."/></label><div className="toolbar-actions"><FilterSelect label="Filtrar por categoría" value={category} onChange={setCategory}><option>Todas</option>{categories.map(item=><option key={item}>{item}</option>)}</FilterSelect><FilterSelect label="Filtrar por estado de stock" value={stockState} onChange={setStockState}><option>Todos</option><option value="Disponible">Disponible</option><option value="Bajo">Bajo stock</option></FilterSelect></div></div>
+      <DataTable headers={["Código", "Producto", "Categoría", "Stock actual", "Stock mínimo", "Estado"]}>
+        {filtered.map(p=><tr key={p.code}><td className="code">{p.code}</td><td><strong>{p.name}</strong><small>{p.unit}</small></td><td>{p.category}</td><td><strong>{p.stock}</strong></td><td>{p.min}</td><td><Badge tone={p.status==="low"?"danger":"success"}>{p.status==="low"?"Bajo stock":"Disponible"}</Badge></td></tr>)}
+        {!filtered.length&&<EmptyRow columns={6}/>}
       </DataTable>
     </section>
   </>;
 }
 
 function Movements({ onAdd, canEdit, version }: { onAdd: () => void; canEdit: boolean; version: number }) {
-  const [items,setItems] = useState(movements);
-  useEffect(()=>{api<any[]>("/movements").then(rows=>setItems(rows.map(m=>({id:`#MOV-${m.id}`,product:m.product_name,type:m.movement_type.replace(" positivo","").replace(" negativo",""),qty:m.quantity,date:new Date(m.created_at).toLocaleString("es-CL"),user:m.user_name})))).catch(()=>{});},[version]);
+  const [items,setItems] = useState<any[]>(authToken.startsWith("demo:")?movements:[]);
+  const [query,setQuery]=useState("");
+  const [type,setType]=useState("Todos");
+  const [period,setPeriod]=useState("Todos");
+  useEffect(()=>{api<any[]>("/movements").then(rows=>setItems(rows.map(m=>({id:`#MOV-${m.id}`,product:m.product_name,type:m.movement_type,qty:m.quantity,date:new Date(m.created_at).toLocaleString("es-CL"),rawDate:m.created_at,user:m.user_name,reason:m.reason,lot:m.lot_number})))).catch(()=>{});},[version]);
+  const filtered=items.filter((item:any)=>{
+    const matchQuery=[item.id,item.product,item.lot].some(value=>String(value||"").toLowerCase().includes(query.toLowerCase()));
+    const matchType=type==="Todos"||(type==="Ajuste"&&String(item.type).startsWith("Ajuste"))||item.type===type;
+    const date=new Date(item.rawDate||Date.now()); const now=new Date();
+    const matchPeriod=period==="Todos"||(period==="30"&&date>=new Date(now.getTime()-30*86400000))||(period==="7"&&date>=new Date(now.getTime()-7*86400000));
+    return matchQuery&&matchType&&matchPeriod;
+  });
+  const totals={entries:items.filter((item:any)=>["Entrada","Ajuste positivo"].includes(item.type)).reduce((sum:number,item:any)=>sum+Number(item.qty),0),exits:items.filter((item:any)=>["Salida","Ajuste negativo"].includes(item.type)).reduce((sum:number,item:any)=>sum+Number(item.qty),0),adjustments:items.filter((item:any)=>String(item.type).startsWith("Ajuste")||item.type==="Anulación").length};
   return <>
     <Header title="Movimientos" description="Historial íntegro de entradas, salidas, ajustes y anulaciones." action={canEdit&&<Button icon="plus" onClick={onAdd}>Registrar movimiento</Button>}/>
-    <div className="mini-stats"><div><Icon name="arrowUp"/><span><strong>684</strong>Entradas este mes</span></div><div><Icon name="arrowDown"/><span><strong>429</strong>Salidas este mes</span></div><div><Icon name="swap"/><span><strong>12</strong>Ajustes y anulaciones</span></div></div>
-    <section className="panel"><div className="toolbar"><label className="search-field"><Icon name="search" size={18}/><input placeholder="Buscar movimiento o producto..."/></label><div className="toolbar-actions"><Button variant="secondary">Tipo: Todos</Button><Button variant="secondary">Junio 2025</Button></div></div>
-      <DataTable headers={["ID", "Producto", "Tipo", "Cantidad", "Fecha", "Responsable"]}>{items.map(m=><tr key={m.id}><td className="code">{m.id}</td><td><strong>{m.product}</strong></td><td><Badge tone={m.type==="Entrada"?"success":m.type==="Salida"?"info":m.type==="Anulación"?"warning":"neutral"}>{m.type}</Badge></td><td className={m.type==="Entrada"?"positive":"negative"}>{m.type==="Entrada"?"+":"−"}{m.qty}</td><td>{m.date}</td><td>{m.user}</td></tr>)}</DataTable>
+    <div className="mini-stats"><div><Icon name="arrowUp"/><span><strong>{totals.entries.toLocaleString("es-CL")}</strong>Unidades ingresadas</span></div><div><Icon name="arrowDown"/><span><strong>{totals.exits.toLocaleString("es-CL")}</strong>Unidades retiradas</span></div><div><Icon name="swap"/><span><strong>{totals.adjustments}</strong>Ajustes y anulaciones</span></div></div>
+    <section className="panel"><div className="toolbar"><label className="search-field"><Icon name="search" size={18}/><input value={query} onChange={event=>setQuery(event.target.value)} placeholder="Buscar ID, producto o lote..."/></label><div className="toolbar-actions"><FilterSelect label="Filtrar por tipo" value={type} onChange={setType}><option>Todos</option><option>Entrada</option><option>Salida</option><option>Ajuste</option><option>Anulación</option></FilterSelect><FilterSelect label="Filtrar por período" value={period} onChange={setPeriod}><option value="Todos">Todo el historial</option><option value="7">Últimos 7 días</option><option value="30">Últimos 30 días</option></FilterSelect></div></div>
+      <DataTable headers={["ID", "Producto / lote", "Tipo", "Cantidad", "Fecha", "Responsable", "Motivo"]}>{filtered.map((m:any)=><tr key={m.id}><td className="code">{m.id}</td><td><strong>{m.product}</strong>{m.lot&&<small>Lote {m.lot}</small>}</td><td><Badge tone={m.type==="Entrada"?"success":m.type==="Salida"?"info":m.type==="Anulación"?"warning":"neutral"}>{m.type}</Badge></td><td className={["Entrada","Ajuste positivo"].includes(m.type)?"positive":"negative"}>{["Entrada","Ajuste positivo"].includes(m.type)?"+":"−"}{m.qty}</td><td>{m.date}</td><td>{m.user}</td><td className="reason-cell">{m.reason||"Sin observación"}</td></tr>)}{!filtered.length&&<EmptyRow columns={7}/>}</DataTable>
     </section>
   </>;
 }
 
 function Lots({ canEdit, onAdd, version }: { canEdit: boolean; onAdd: () => void; version: number }) {
-  const [items,setItems] = useState(lots);
-  useEffect(()=>{api<any[]>("/lots").then(rows=>setItems(rows.map(l=>({lot:l.lot,product:l.product,stock:l.stock,expires:new Date(l.expires).toLocaleDateString("es-CL"),days:l.days,state:l.days<=30?"Próximo a vencer":"Vigente"})))).catch(()=>{});},[version]);
+  const [items,setItems] = useState<any[]>(authToken.startsWith("demo:")?lots:[]);
+  const [query,setQuery]=useState("");
+  const [state,setState]=useState("Todos");
+  useEffect(()=>{api<any[]>("/lots").then(rows=>setItems(rows.map(l=>({...l,expires:new Date(l.expires).toLocaleDateString("es-CL"),state:l.days<0?"Vencido":l.days<=30?"Próximo a vencer":"Vigente"})))).catch(()=>{});},[version]);
+  const filtered=items.filter((item:any)=>(item.lot.toLowerCase().includes(query.toLowerCase())||item.product.toLowerCase().includes(query.toLowerCase()))&&(state==="Todos"||item.state===state));
+  const attention=items.filter((item:any)=>item.state!=="Vigente").length;
   return <>
     <Header title="Lotes y vencimientos" description="Controla la trazabilidad y vigencia de cada lote almacenado." action={canEdit&&<Button icon="plus" onClick={onAdd}>Registrar lote</Button>}/>
-    <div className="notice warning-notice"><span><Icon name="clock"/></span><div><strong>1 lote próximo a vencer</strong><p>El período de alerta está configurado en 30 días.</p></div><Button variant="secondary">Revisar configuración</Button></div>
-    <section className="panel"><div className="toolbar"><label className="search-field"><Icon name="search" size={18}/><input placeholder="Buscar lote o producto..."/></label><Button variant="secondary">Todos los estados</Button></div>
-      <DataTable headers={["Nº de lote", "Producto", "Stock disponible", "Fecha de vencimiento", "Días restantes", "Estado"]}>{items.map(l=><tr key={l.lot}><td className="code">{l.lot}</td><td><strong>{l.product}</strong></td><td>{l.stock}</td><td>{l.expires}</td><td>{l.days} días</td><td><Badge tone={l.state==="Vigente"?"success":"warning"}>{l.state}</Badge></td></tr>)}</DataTable>
+    <div className="notice warning-notice"><span><Icon name="clock"/></span><div><strong>{attention} {attention===1?"lote requiere":"lotes requieren"} atención</strong><p>Incluye lotes vencidos y próximos a vencer dentro de 30 días.</p></div></div>
+    <section className="panel"><div className="toolbar"><label className="search-field"><Icon name="search" size={18}/><input value={query} onChange={event=>setQuery(event.target.value)} placeholder="Buscar lote o producto..."/></label><FilterSelect label="Filtrar por estado" value={state} onChange={setState}><option>Todos</option><option>Vigente</option><option>Próximo a vencer</option><option>Vencido</option></FilterSelect></div>
+      <DataTable headers={["Nº de lote", "Producto", "Stock disponible", "Fecha de vencimiento", "Días restantes", "Estado"]}>{filtered.map((l:any)=><tr className={l.state==="Vencido"?"row-danger":l.state==="Próximo a vencer"?"row-warning":""} key={l.lot}><td className="code">{l.lot}</td><td><strong>{l.product}</strong></td><td>{l.stock}</td><td>{l.expires}</td><td className={l.days<0?"negative":l.days<=30?"warning-text":""}>{l.days<0?`Hace ${Math.abs(l.days)} días`:`${l.days} días`}</td><td><Badge tone={l.state==="Vigente"?"success":l.state==="Vencido"?"danger":"warning"}>{l.state}</Badge></td></tr>)}{!filtered.length&&<EmptyRow columns={6}/>}</DataTable>
     </section>
   </>;
 }
 
-function Alerts() {
-  const [resolved, setResolved] = useState<string[]>([]);
-  const fallback = [
-    { id:"a1", title:"Stock bajo: Suero fisiológico 0,9%", text:"25 unidades disponibles, por debajo del mínimo definido de 40.", kind:"Stock mínimo", time:"Hace 12 min", tone:"danger" },
-    { id:"a2", title:"Vencimiento próximo: Guantes de nitrilo", text:"El lote GN-2026-03 vence el 02 de julio de 2025 (20 días).", kind:"Vencimiento", time:"Hace 1 h", tone:"warning" },
-    { id:"a3", title:"Stock bajo: Anestesia dental", text:"18 cárpules disponibles, por debajo del mínimo definido de 30.", kind:"Stock mínimo", time:"Hace 3 h", tone:"danger" },
-  ];
-  const [items,setItems] = useState(fallback);
-  useEffect(()=>{api<any[]>("/alerts").then(rows=>setItems(rows.filter(a=>a.status==="Pendiente").map(a=>({id:String(a.id),title:`${a.type}: ${a.product}`,text:a.message,kind:a.type,time:new Date(a.createdAt).toLocaleString("es-CL"),tone:a.type==="Stock mínimo"?"danger":"warning"})))).catch(()=>{});},[]);
+function Alerts({ onChange }: { onChange: (count: number) => void }) {
+  const [items,setItems] = useState<any[]>([]);
+  const [status,setStatus]=useState("Pendiente");
+  const [kind,setKind]=useState("Todas");
+  const [busy,setBusy]=useState("");
+  const [message,setMessage]=useState("");
+  const load=()=>api<any[]>("/alerts").then(rows=>{setItems(rows);onChange(rows.filter(item=>item.status==="Pendiente").length)}).catch(error=>setMessage(error instanceof Error?error.message:"No fue posible cargar las alertas."));
+  useEffect(load,[]);
   const review = async (id:string) => {
-    try { await api(`/alerts/${id}/review`,{method:"PATCH"}); setResolved([...resolved,id]); } catch { /* Se conserva la alerta si la operación falla. */ }
+    setBusy(id); setMessage("");
+    try { await api(`/alerts/${id}/review`,{method:"PATCH"}); await load(); setMessage("Alerta marcada como revisada."); }
+    catch (error) { setMessage(error instanceof Error?error.message:"No fue posible actualizar la alerta."); }
+    finally { setBusy(""); }
   };
+  const filtered=items.filter(item=>(status==="Todas"||item.status===status)&&(kind==="Todas"||item.type===kind));
+  const pending=items.filter(item=>item.status==="Pendiente").length;
   return <>
     <Header title="Alertas" description="Notificaciones automáticas de stock y vencimientos."/>
-    <div className="tabs"><button className="active">Pendientes <span>{items.length-resolved.length}</span></button><button>Revisadas</button><button>Todas</button></div>
-    <div className="alerts-page">{items.filter(i=>!resolved.includes(i.id)).map(i=><div className="big-alert" key={i.id}><span className={`alert-icon ${i.tone}`}><Icon name={i.tone==="danger"?"arrowDown":"clock"}/></span><div className="big-alert-copy"><div><Badge tone={i.tone}>{i.kind}</Badge><small>{i.time}</small></div><h3>{i.title}</h3><p>{i.text}</p></div><Button variant="secondary" onClick={()=>review(i.id)} icon="check">Marcar revisada</Button></div>)}{items.length===resolved.length&&<div className="empty-state"><span><Icon name="check" size={30}/></span><h2>Todo al día</h2><p>No quedan alertas pendientes por revisar.</p></div>}</div>
+    <div className="tabs"><button className={status==="Pendiente"?"active":""} onClick={()=>setStatus("Pendiente")}>Pendientes <span>{pending}</span></button><button className={status==="Revisada"?"active":""} onClick={()=>setStatus("Revisada")}>Revisadas</button><button className={status==="Todas"?"active":""} onClick={()=>setStatus("Todas")}>Todas</button><FilterSelect label="Filtrar por tipo" value={kind} onChange={setKind}><option>Todas</option><option>Stock mínimo</option><option>Vencimiento</option></FilterSelect></div>
+    {message&&<div className={`inline-feedback ${message.includes("revisada")?"success":"error"}`}>{message}</div>}
+    <div className="alerts-page">{filtered.map(i=>{const tone=i.type==="Stock mínimo"?"danger":"warning";return <div className={`big-alert ${i.status==="Revisada"?"reviewed":""}`} key={i.id}><span className={`alert-icon ${tone}`}><Icon name={tone==="danger"?"arrowDown":"clock"}/></span><div className="big-alert-copy"><div><Badge tone={tone}>{i.type}</Badge><Badge tone={i.status==="Revisada"?"success":"neutral"}>{i.status}</Badge><small>{new Date(i.createdAt).toLocaleString("es-CL")}</small></div><h3>{i.type}: {i.product}</h3><p>{i.message}</p></div>{i.status==="Pendiente"&&<Button variant="secondary" disabled={busy===String(i.id)} onClick={()=>review(String(i.id))} icon="check">{busy===String(i.id)?"Guardando...":"Marcar revisada"}</Button>}</div>})}{!filtered.length&&<div className="empty-state"><span><Icon name="check" size={30}/></span><h2>Sin resultados</h2><p>No hay alertas que coincidan con estos filtros.</p></div>}</div>
   </>;
 }
 
 function Orders({ onAdd, version }: { onAdd: () => void; version: number }) {
-  const [items,setItems] = useState(orders);
+  const [items,setItems] = useState<any[]>(authToken.startsWith("demo:")?orders:[]);
+  const [query,setQuery]=useState("");
+  const [state,setState]=useState("Todos");
   useEffect(()=>{api<any[]>("/orders").then(rows=>setItems(rows.map(o=>({id:o.orderNumber,provider:o.supplier,items:o.items,total:Number(o.total).toLocaleString("es-CL",{style:"currency",currency:"CLP"}),date:new Date(o.issuedAt).toLocaleDateString("es-CL"),state:o.status})))).catch(()=>{});},[version]);
+  const filtered=items.filter(item=>(item.id.toLowerCase().includes(query.toLowerCase())||item.provider.toLowerCase().includes(query.toLowerCase()))&&(state==="Todos"||item.state===state));
   return <>
     <Header title="Órdenes de compra" description="Planifica y controla la reposición de insumos." action={<Button icon="plus" onClick={onAdd}>Nueva orden</Button>}/>
-    <div className="mini-stats"><div><Icon name="clock"/><span><strong>1</strong>Orden en borrador</span></div><div><Icon name="cart"/><span><strong>1</strong>Orden en tránsito</span></div><div><Icon name="check"/><span><strong>14</strong>Recibidas este mes</span></div></div>
-    <section className="panel"><div className="toolbar"><label className="search-field"><Icon name="search" size={18}/><input placeholder="Buscar orden o proveedor..."/></label><Button variant="secondary">Todos los estados</Button></div>
-      <DataTable headers={["Orden", "Proveedor", "Productos", "Total", "Fecha de emisión", "Estado", ""]}>{items.map(o=><tr key={o.id}><td className="code">{o.id}</td><td><strong>{o.provider}</strong></td><td>{o.items} productos</td><td><strong>{o.total}</strong></td><td>{o.date}</td><td><Badge tone={o.state==="Recibida"?"success":o.state==="Enviada"?"info":"neutral"}>{o.state}</Badge></td><td><button className="icon-btn"><Icon name="more"/></button></td></tr>)}</DataTable>
+    <div className="mini-stats"><div><Icon name="clock"/><span><strong>{items.filter(item=>item.state==="Borrador").length}</strong>Órdenes en borrador</span></div><div><Icon name="cart"/><span><strong>{items.filter(item=>item.state==="Enviada").length}</strong>Órdenes enviadas</span></div><div><Icon name="check"/><span><strong>{items.filter(item=>item.state==="Recibida").length}</strong>Órdenes recibidas</span></div></div>
+    <section className="panel"><div className="toolbar"><label className="search-field"><Icon name="search" size={18}/><input value={query} onChange={event=>setQuery(event.target.value)} placeholder="Buscar orden o proveedor..."/></label><FilterSelect label="Filtrar por estado" value={state} onChange={setState}><option>Todos</option><option>Borrador</option><option>Enviada</option><option>Recibida</option><option>Anulada</option></FilterSelect></div>
+      <DataTable headers={["Orden", "Proveedor", "Productos", "Total", "Fecha de emisión", "Estado"]}>{filtered.map(o=><tr key={o.id}><td className="code">{o.id}</td><td><strong>{o.provider}</strong></td><td>{o.items} productos</td><td><strong>{o.total}</strong></td><td>{o.date}</td><td><Badge tone={o.state==="Recibida"?"success":o.state==="Enviada"?"info":o.state==="Anulada"?"danger":"neutral"}>{o.state}</Badge></td></tr>)}{!filtered.length&&<EmptyRow columns={6}/>}</DataTable>
     </section>
   </>;
 }
 
 function Reports() {
+  const [from,setFrom]=useState("");
+  const [to,setTo]=useState("");
+  const [message,setMessage]=useState("");
+  const [busy,setBusy]=useState("");
   const download = async (type:string) => {
-    const rows=await api<Record<string,unknown>[]>(`/reports/${type}`);
-    if (!rows.length) return;
-    const headers=Object.keys(rows[0]);
-    const csv=[headers.join(";"),...rows.map(row=>headers.map(key=>`"${String(row[key]??"").replaceAll('"','""')}"`).join(";"))].join("\n");
-    const link=document.createElement("a");
-    link.href=URL.createObjectURL(new Blob(["\ufeff",csv],{type:"text/csv;charset=utf-8"}));
-    link.download=`reporte-${type}-${new Date().toISOString().slice(0,10)}.csv`;
-    link.click();
-    URL.revokeObjectURL(link.href);
+    setBusy(type);setMessage("");
+    try{
+      let rows=await api<Record<string,unknown>[]>(`/reports/${type}`);
+      if((from||to)&&["movements","orders"].includes(type)) rows=rows.filter(row=>{const raw=row.created_at||row.issued_at;const date=raw?String(raw).slice(0,10):"";return(!from||date>=from)&&(!to||date<=to)});
+      if (!rows.length){setMessage("No existen datos para generar este reporte con los filtros seleccionados.");return}
+      const headers=Object.keys(rows[0]);
+      const csv=[headers.join(";"),...rows.map(row=>headers.map(key=>`"${String(row[key]??"").replaceAll('"','""')}"`).join(";"))].join("\n");
+      const link=document.createElement("a");
+      link.href=URL.createObjectURL(new Blob(["\ufeff",csv],{type:"text/csv;charset=utf-8"}));
+      link.download=`reporte-${type}-${new Date().toISOString().slice(0,10)}.csv`;
+      link.click();
+      URL.revokeObjectURL(link.href);
+      setMessage("Reporte CSV generado correctamente.");
+    }catch(caught){setMessage(caught instanceof Error?caught.message:"No fue posible generar el reporte.")}
+    finally{setBusy("")}
   };
   const reportsList=[["Stock actual","Existencias disponibles por producto y categoría.","box","stock"],["Productos bajo mínimo","Insumos que requieren reposición prioritaria.","alert","minimum"],["Próximos vencimientos","Lotes que vencerán dentro del período configurado.","clock","expiring"],["Historial de movimientos","Auditoría completa de operaciones del inventario.","swap","movements"],["Órdenes de compra","Compras emitidas, estados, proveedores y montos.","cart","orders"],["Valorización de inventario","Valor estimado del stock actualmente disponible.","chart","valuation"]];
   return <>
     <Header title="Reportes" description="Información confiable para apoyar la toma de decisiones." action={<Button icon="arrowDown" onClick={()=>download("stock")}>Exportar stock</Button>}/>
+    <section className="report-filters"><div><strong>Período de movimientos y compras</strong><p>Las fechas se aplican a los reportes que contienen historial.</p></div><label className="field"><span>Desde</span><input type="date" value={from} onChange={event=>setFrom(event.target.value)}/></label><label className="field"><span>Hasta</span><input type="date" value={to} onChange={event=>setTo(event.target.value)}/></label></section>
+    {message&&<div className={`inline-feedback ${message.includes("correctamente")?"success":"error"}`}>{message}</div>}
     <div className="report-grid">
-      {reportsList.map(r=><div className="report-card" key={r[0]}><span><Icon name={r[2] as IconName}/></span><h3>{r[0]}</h3><p>{r[1]}</p><button className="text-link" onClick={()=>download(r[3])}>Generar reporte <Icon name="chevron" size={15}/></button></div>)}
+      {reportsList.map(r=><div className="report-card" key={r[0]}><span><Icon name={r[2] as IconName}/></span><h3>{r[0]}</h3><p>{r[1]}</p><button className="text-link" disabled={busy===r[3]} onClick={()=>download(r[3])}>{busy===r[3]?"Generando...":"Generar reporte"} <Icon name="chevron" size={15}/></button></div>)}
     </div>
   </>;
 }
 
 function Users({ onAdd, version }: { onAdd: () => void; version: number }) {
   const fallback=[["Valentina Marín","admin@clinicamaro.cl","Administrador","Activo","VM"],["Carolina Soto","bodega@clinicamaro.cl","Encargado de Bodega","Activo","CS"],["Paula Reyes","compras@clinicamaro.cl","Comprador","Activo","PR"],["Matías Rojas","auditor@clinicamaro.cl","Auditor","Activo","MR"]];
-  const [users,setUsers]=useState(fallback);
+  const [users,setUsers]=useState<string[][]>(authToken.startsWith("demo:")?fallback:[]);
+  const [query,setQuery]=useState("");
+  const [role,setRole]=useState("Todos");
   useEffect(()=>{api<any[]>("/users").then(rows=>setUsers(rows.map(u=>[u.name,u.email,u.role,u.active?"Activo":"Inactivo",u.name.split(" ").map((x:string)=>x[0]).slice(0,2).join("")]))).catch(()=>{});},[version]);
+  const filtered=users.filter(user=>(user[0].toLowerCase().includes(query.toLowerCase())||user[1].toLowerCase().includes(query.toLowerCase()))&&(role==="Todos"||user[2]===role));
   return <>
     <Header title="Usuarios y accesos" description="Gestiona cuentas, roles y permisos del equipo." action={<Button icon="plus" onClick={onAdd}>Nuevo usuario</Button>}/>
-    <section className="panel"><DataTable headers={["Usuario", "Correo", "Rol", "Estado", ""]}>{users.map(u=><tr key={u[1]}><td><div className="user-cell"><span className="mini-avatar">{u[4]}</span><strong>{u[0]}</strong></div></td><td>{u[1]}</td><td><Badge>{u[2]}</Badge></td><td><Badge tone="success">{u[3]}</Badge></td><td><button className="icon-btn"><Icon name="more"/></button></td></tr>)}</DataTable></section>
+    <section className="panel"><div className="toolbar"><label className="search-field"><Icon name="search" size={18}/><input value={query} onChange={event=>setQuery(event.target.value)} placeholder="Buscar por nombre o correo..."/></label><FilterSelect label="Filtrar por rol" value={role} onChange={setRole}><option>Todos</option>{Object.keys(roleAccess).map(item=><option key={item}>{item}</option>)}</FilterSelect></div><DataTable headers={["Usuario", "Correo", "Rol", "Estado"]}>{filtered.map(u=><tr key={u[1]}><td><div className="user-cell"><span className="mini-avatar">{u[4]}</span><strong>{u[0]}</strong></div></td><td>{u[1]}</td><td><Badge>{u[2]}</Badge></td><td><Badge tone={u[3]==="Activo"?"success":"danger"}>{u[3]}</Badge></td></tr>)}{!filtered.length&&<EmptyRow columns={4}/>}</DataTable></section>
+    <section className="permissions-panel"><h2>Permisos por rol</h2><p>Los permisos se aplican también en la API; ocultar un control no reemplaza la autorización del servidor.</p><div className="permission-grid">{(Object.entries(roleAccess) as [Role,string[]][]).map(([name,pages])=><div key={name}><strong>{name}</strong><span>{pages.join(" · ")}</span></div>)}</div></section>
   </>;
 }
 
 function Settings() {
+  const [section,setSection]=useState("Alertas e inventario");
   const [days,setDays]=useState("30");
   const [stockAlerts,setStockAlerts]=useState(true);
   const [dailySummary,setDailySummary]=useState(true);
   const [saved,setSaved]=useState(false);
+  const [error,setError]=useState("");
+  const [saving,setSaving]=useState(false);
   useEffect(()=>{api<Record<string,string>>("/settings").then(data=>{setDays(data.expiration_warning_days || "30");setStockAlerts(data.minimum_stock_alerts!=="false");setDailySummary(data.daily_summary!=="false")}).catch(()=>{});},[]);
   const save = async () => {
-    await api("/settings",{method:"PUT",body:JSON.stringify({expiration_warning_days:days,minimum_stock_alerts:stockAlerts,daily_summary:dailySummary})});
-    setSaved(true);
-    window.setTimeout(()=>setSaved(false),2000);
+    const parsed=Number(days);
+    if(!Number.isInteger(parsed)||parsed<1||parsed>365){setError("La anticipación debe ser un número entre 1 y 365 días.");return;}
+    setSaving(true);setError("");
+    try{await api("/settings",{method:"PUT",body:JSON.stringify({expiration_warning_days:days,minimum_stock_alerts:stockAlerts,daily_summary:dailySummary})});setSaved(true);window.setTimeout(()=>setSaved(false),2000)}
+    catch(caught){setError(caught instanceof Error?caught.message:"No fue posible guardar la configuración.")}
+    finally{setSaving(false)}
   };
+  const sections=["Alertas e inventario","Información de la clínica","Seguridad","Permisos y roles"];
   return <>
     <Header title="Configuración" description="Ajustes generales, alertas y seguridad del sistema."/>
-    <div className="settings-grid"><aside className="settings-nav"><button className="active">Alertas e inventario</button><button>Información de la clínica</button><button>Seguridad</button><button>Permisos y roles</button></aside>
-      <section className="panel settings-panel"><h2>Alertas e inventario</h2><p>Configura cómo se monitorea automáticamente el inventario.</p><hr/>
+    <div className="settings-grid"><aside className="settings-nav">{sections.map(item=><button className={section===item?"active":""} onClick={()=>setSection(item)} key={item}>{item}</button>)}</aside>
+      {section==="Alertas e inventario"&&<section className="panel settings-panel"><h2>Alertas e inventario</h2><p>Configura cómo se monitorea automáticamente el inventario.</p><hr/>
         <label className="field"><span>Anticipación de vencimientos</span><small>Generar una alerta cuando un lote esté próximo a vencer.</small><div className="input-suffix"><input value={days} onChange={e=>setDays(e.target.value)}/><span>días</span></div></label>
-        <div className="switch-row"><div><strong>Alertas de stock mínimo</strong><p>Notificar cuando el stock disponible sea inferior al mínimo.</p></div><button className={`switch ${stockAlerts?"on":""}`} onClick={()=>setStockAlerts(!stockAlerts)}><i/></button></div>
-        <div className="switch-row"><div><strong>Resumen diario</strong><p>Enviar un resumen de alertas pendientes al administrador.</p></div><button className={`switch ${dailySummary?"on":""}`} onClick={()=>setDailySummary(!dailySummary)}><i/></button></div>
-        <div className="form-actions"><Button onClick={save}>{saved?"Cambios guardados":"Guardar cambios"}</Button></div>
-      </section></div>
+        <div className="switch-row"><div><strong>Alertas de stock mínimo</strong><p>Notificar cuando el stock disponible sea inferior al mínimo.</p></div><button aria-label="Alternar alertas de stock mínimo" className={`switch ${stockAlerts?"on":""}`} onClick={()=>setStockAlerts(!stockAlerts)}><i/></button></div>
+        <div className="switch-row"><div><strong>Resumen diario</strong><p>Enviar un resumen de alertas pendientes al administrador.</p></div><button aria-label="Alternar resumen diario" className={`switch ${dailySummary?"on":""}`} onClick={()=>setDailySummary(!dailySummary)}><i/></button></div>
+        {error&&<div className="inline-feedback error">{error}</div>}<div className="form-actions"><Button disabled={saving} onClick={save}>{saving?"Guardando...":saved?"Cambios guardados":"Guardar cambios"}</Button></div>
+      </section>}
+      {section==="Información de la clínica"&&<section className="panel settings-panel"><h2>Información de la clínica</h2><p>Datos institucionales visibles en el sistema.</p><hr/><div className="read-only-grid"><label className="field"><span>Nombre</span><input value="Clínica Dental Maró" readOnly/></label><label className="field"><span>Ciudad</span><input value="Temuco, Chile" readOnly/></label></div><div className="notice info-notice"><Icon name="lock"/><span>Esta información es de solo lectura. Su edición requiere soporte adicional en el backend.</span></div></section>}
+      {section==="Seguridad"&&<section className="panel settings-panel"><h2>Seguridad</h2><p>Políticas aplicadas por el servidor.</p><hr/><div className="security-list"><div><Icon name="lock"/><span><strong>Bloqueo automático</strong><small>5 intentos fallidos · 15 minutos</small></span></div><div><Icon name="clock"/><span><strong>Duración de sesión</strong><small>8 horas</small></span></div><div><Icon name="check"/><span><strong>Contraseñas protegidas</strong><small>Hash bcrypt; nunca se muestran en pantalla</small></span></div></div></section>}
+      {section==="Permisos y roles"&&<section className="panel settings-panel"><h2>Permisos y roles</h2><p>Accesos definidos en la interfaz y validados por la API.</p><hr/><div className="permission-grid">{(Object.entries(roleAccess) as [Role,string[]][]).map(([name,pages])=><div key={name}><strong>{name}</strong><span>{pages.join(" · ")}</span></div>)}</div></section>}
+    </div>
   </>;
 }
 
@@ -485,15 +564,20 @@ function ProductModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =
   const [catalogs,setCatalogs]=useState<any>({categories:[],suppliers:[]});
   const [form,setForm]=useState({name:"",code:"",categoryId:"",unit:"unidades",minimumStock:"0",supplierId:""});
   const [error,setError]=useState("");
+  const [saving,setSaving]=useState(false);
   useEffect(()=>{api<any>("/catalogs").then(data=>{setCatalogs(data);setForm(current=>({...current,categoryId:String(data.categories[0]?.id || ""),supplierId:String(data.suppliers[0]?.id || "")}))}).catch(e=>setError(e.message));},[]);
   const update=(key:string,value:string)=>setForm({...form,[key]:value});
   const save=async()=>{
+    if(!form.name.trim()||!form.code.trim()||!form.categoryId){setError("Completa el nombre, código y categoría.");return}
+    if(Number(form.minimumStock)<0){setError("El stock mínimo no puede ser negativo.");return}
+    setSaving(true);setError("");
     try {
-      await api("/products",{method:"POST",body:JSON.stringify({...form,categoryId:Number(form.categoryId),supplierId:Number(form.supplierId),minimumStock:Number(form.minimumStock)})});
+      await api("/products",{method:"POST",body:JSON.stringify({...form,name:form.name.trim(),code:form.code.trim().toUpperCase(),categoryId:Number(form.categoryId),supplierId:Number(form.supplierId),minimumStock:Number(form.minimumStock)})});
       onSaved(); onClose();
     } catch(caught) { setError(caught instanceof Error?caught.message:"No fue posible guardar el producto."); }
+    finally { setSaving(false); }
   };
-  return <Modal title="Registrar nuevo producto" onClose={onClose}><div className="modal-body"><div className="form-grid"><label className="field"><span>Nombre del producto</span><input value={form.name} onChange={e=>update("name",e.target.value)} placeholder="Ej. Composite dental A2"/></label><label className="field"><span>Código</span><input value={form.code} onChange={e=>update("code",e.target.value)} placeholder="ODO-007"/></label><label className="field"><span>Categoría</span><select value={form.categoryId} onChange={e=>update("categoryId",e.target.value)}>{catalogs.categories.map((item:any)=><option value={item.id} key={item.id}>{item.name}</option>)}</select></label><label className="field"><span>Unidad de medida</span><select value={form.unit} onChange={e=>update("unit",e.target.value)}><option value="unidades">Unidades</option><option value="cajas">Cajas</option><option value="frascos">Frascos</option><option value="cárpules">Cárpules</option></select></label><label className="field"><span>Stock mínimo</span><input value={form.minimumStock} onChange={e=>update("minimumStock",e.target.value)} type="number" min="0"/></label><label className="field"><span>Proveedor preferente</span><select value={form.supplierId} onChange={e=>update("supplierId",e.target.value)}>{catalogs.suppliers.map((item:any)=><option value={item.id} key={item.id}>{item.name}</option>)}</select></label></div>{error&&<div className="login-error modal-error"><Icon name="alert" size={16}/>{error}</div>}</div><div className="modal-foot"><Button variant="ghost" onClick={onClose}>Cancelar</Button><Button onClick={save}>Guardar producto</Button></div></Modal>;
+  return <Modal title="Registrar nuevo producto" onClose={onClose}><div className="modal-body"><div className="form-grid"><label className="field"><span>Nombre del producto *</span><input value={form.name} onChange={e=>update("name",e.target.value)} placeholder="Ej. Composite dental A2"/></label><label className="field"><span>Código *</span><input value={form.code} onChange={e=>update("code",e.target.value)} placeholder="ODO-007"/></label><label className="field"><span>Categoría *</span><select value={form.categoryId} onChange={e=>update("categoryId",e.target.value)}>{catalogs.categories.map((item:any)=><option value={item.id} key={item.id}>{item.name}</option>)}</select></label><label className="field"><span>Unidad de medida *</span><select value={form.unit} onChange={e=>update("unit",e.target.value)}><option value="unidades">Unidades</option><option value="cajas">Cajas</option><option value="frascos">Frascos</option><option value="cárpules">Cárpules</option></select></label><label className="field"><span>Stock mínimo *</span><input value={form.minimumStock} onChange={e=>update("minimumStock",e.target.value)} type="number" min="0"/></label><label className="field"><span>Proveedor preferente</span><select value={form.supplierId} onChange={e=>update("supplierId",e.target.value)}>{catalogs.suppliers.map((item:any)=><option value={item.id} key={item.id}>{item.name}</option>)}</select></label></div>{error&&<div className="login-error modal-error"><Icon name="alert" size={16}/>{error}</div>}</div><div className="modal-foot"><Button variant="ghost" onClick={onClose} disabled={saving}>Cancelar</Button><Button disabled={saving} onClick={save}>{saving?"Guardando...":"Guardar producto"}</Button></div></Modal>;
 }
 
 function MovementModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
@@ -501,41 +585,63 @@ function MovementModal({ onClose, onSaved }: { onClose: () => void; onSaved: () 
   const [catalogs,setCatalogs]=useState<any>({products:[],lots:[]});
   const [form,setForm]=useState({productId:"",lotId:"",quantity:"",reason:""});
   const [error,setError]=useState("");
+  const [saving,setSaving]=useState(false);
   useEffect(()=>{api<any>("/catalogs").then(data=>{setCatalogs(data);const product=String(data.products[0]?.id || "");const lot=data.lots.find((l:any)=>String(l.productId)===product);setForm(current=>({...current,productId:product,lotId:String(lot?.id || "")}))}).catch(e=>setError(e.message));},[]);
   const lotsForProduct=catalogs.lots.filter((lot:any)=>String(lot.productId)===form.productId);
   const updateProduct=(productId:string)=>setForm({...form,productId,lotId:String(catalogs.lots.find((l:any)=>String(l.productId)===productId)?.id || "")});
   const save=async()=>{
+    const quantity=Number(form.quantity);
+    if(!form.productId||!form.lotId){setError("Selecciona un producto y un lote válido.");return}
+    if(!Number.isFinite(quantity)||quantity===0||(type!=="Ajuste"&&quantity<0)){setError(type==="Ajuste"?"Ingresa una cantidad distinta de cero; usa un valor negativo para reducir stock.":"La cantidad debe ser mayor que cero.");return}
+    if((type==="Ajuste"||type==="Salida")&&!form.reason.trim()){setError("Indica el motivo para mantener la trazabilidad del movimiento.");return}
+    setSaving(true);setError("");
     try {
-      await api("/movements",{method:"POST",body:JSON.stringify({productId:Number(form.productId),lotId:Number(form.lotId),type,quantity:Number(form.quantity),reason:form.reason})});
+      await api("/movements",{method:"POST",body:JSON.stringify({productId:Number(form.productId),lotId:Number(form.lotId),type,quantity,reason:form.reason.trim()})});
       onSaved(); onClose();
     } catch(caught) { setError(caught instanceof Error?caught.message:"No fue posible registrar el movimiento."); }
+    finally { setSaving(false); }
   };
-  return <Modal title="Registrar movimiento" onClose={onClose}><div className="modal-body"><div className="type-toggle">{["Entrada","Salida","Ajuste"].map(t=><button className={type===t?"active":""} onClick={()=>setType(t)} key={t}>{t==="Entrada"?<Icon name="arrowUp"/>:t==="Salida"?<Icon name="arrowDown"/>:<Icon name="swap"/>}{t}</button>)}</div><div className="form-grid"><label className="field wide"><span>Producto</span><select value={form.productId} onChange={e=>updateProduct(e.target.value)}>{catalogs.products.map((item:any)=><option value={item.id} key={item.id}>{item.name}</option>)}</select></label><label className="field"><span>Lote</span><select value={form.lotId} onChange={e=>setForm({...form,lotId:e.target.value})}>{lotsForProduct.map((item:any)=><option value={item.id} key={item.id}>{item.lotNumber} · {item.quantity} disp.</option>)}</select></label><label className="field"><span>Cantidad</span><input value={form.quantity} onChange={e=>setForm({...form,quantity:e.target.value})} type="number" min="0.01" step="0.01" placeholder="0"/></label><label className="field wide"><span>Motivo / observación</span><textarea value={form.reason} onChange={e=>setForm({...form,reason:e.target.value})} placeholder="Describe el motivo del movimiento..."/></label></div><div className="notice info-notice"><Icon name="alert"/><span>El stock se actualizará automáticamente y el movimiento quedará registrado en el historial de auditoría.</span></div>{error&&<div className="login-error modal-error"><Icon name="alert" size={16}/>{error}</div>}</div><div className="modal-foot"><Button variant="ghost" onClick={onClose}>Cancelar</Button><Button onClick={save}>Registrar {type.toLowerCase()}</Button></div></Modal>;
+  return <Modal title="Registrar movimiento" onClose={onClose}><div className="modal-body"><div className="type-toggle">{["Entrada","Salida","Ajuste"].map(t=><button type="button" className={type===t?"active":""} onClick={()=>setType(t)} key={t}>{t==="Entrada"?<Icon name="arrowUp"/>:t==="Salida"?<Icon name="arrowDown"/>:<Icon name="swap"/>}{t}</button>)}</div><div className="form-grid"><label className="field wide"><span>Producto *</span><select value={form.productId} onChange={e=>updateProduct(e.target.value)}>{catalogs.products.map((item:any)=><option value={item.id} key={item.id}>{item.name}</option>)}</select></label><label className="field"><span>Lote *</span><select value={form.lotId} onChange={e=>setForm({...form,lotId:e.target.value})}>{lotsForProduct.map((item:any)=><option value={item.id} key={item.id}>{item.lotNumber} · {item.quantity} disp.</option>)}</select></label><label className="field"><span>Cantidad *</span><input value={form.quantity} onChange={e=>setForm({...form,quantity:e.target.value})} type="number" step="0.01" placeholder={type==="Ajuste"?"Ej. -5 o 5":"0"}/><small>{type==="Ajuste"?"Usa positivo para sumar y negativo para descontar.":"Debe ser mayor que cero."}</small></label><label className="field wide"><span>Motivo / observación {type!=="Entrada"&&"*"}</span><textarea value={form.reason} onChange={e=>setForm({...form,reason:e.target.value})} placeholder="Describe el motivo del movimiento..."/></label></div><div className="notice info-notice"><Icon name="alert"/><span>El stock se actualizará automáticamente y el movimiento quedará registrado en el historial de auditoría.</span></div>{error&&<div className="login-error modal-error"><Icon name="alert" size={16}/>{error}</div>}</div><div className="modal-foot"><Button variant="ghost" disabled={saving} onClick={onClose}>Cancelar</Button><Button disabled={saving} onClick={save}>{saving?"Registrando...":`Registrar ${type.toLowerCase()}`}</Button></div></Modal>;
 }
 
 function LotModal({ onClose,onSaved }: { onClose:()=>void;onSaved:()=>void }) {
   const [products,setProducts]=useState<any[]>([]);
   const [form,setForm]=useState({productId:"",lotNumber:"",receivedAt:new Date().toISOString().slice(0,10),expiresAt:""});
   const [error,setError]=useState("");
+  const [saving,setSaving]=useState(false);
   useEffect(()=>{api<any>("/catalogs").then(data=>{setProducts(data.products);setForm(current=>({...current,productId:String(data.products[0]?.id || "")}))}).catch(e=>setError(e.message));},[]);
-  const save=async()=>{try{await api("/lots",{method:"POST",body:JSON.stringify({...form,productId:Number(form.productId)})});onSaved();onClose()}catch(caught){setError(caught instanceof Error?caught.message:"No fue posible registrar el lote.")}};
-  return <Modal title="Registrar lote" onClose={onClose}><div className="modal-body"><div className="form-grid"><label className="field wide"><span>Producto</span><select value={form.productId} onChange={e=>setForm({...form,productId:e.target.value})}>{products.map(item=><option value={item.id} key={item.id}>{item.name}</option>)}</select></label><label className="field"><span>Número de lote</span><input value={form.lotNumber} onChange={e=>setForm({...form,lotNumber:e.target.value})} placeholder="Ej. COMP-2026-01"/></label><label className="field"><span>Fecha de ingreso</span><input type="date" value={form.receivedAt} onChange={e=>setForm({...form,receivedAt:e.target.value})}/></label><label className="field wide"><span>Fecha de vencimiento</span><input type="date" value={form.expiresAt} onChange={e=>setForm({...form,expiresAt:e.target.value})}/></label></div>{error&&<div className="login-error modal-error"><Icon name="alert" size={16}/>{error}</div>}</div><div className="modal-foot"><Button variant="ghost" onClick={onClose}>Cancelar</Button><Button onClick={save}>Guardar lote</Button></div></Modal>;
+  const save=async()=>{if(!form.productId||!form.lotNumber.trim()||!form.expiresAt){setError("Completa todos los campos obligatorios.");return}if(form.expiresAt<form.receivedAt){setError("La fecha de vencimiento no puede ser anterior al ingreso.");return}setSaving(true);setError("");try{await api("/lots",{method:"POST",body:JSON.stringify({...form,lotNumber:form.lotNumber.trim(),productId:Number(form.productId)})});onSaved();onClose()}catch(caught){setError(caught instanceof Error?caught.message:"No fue posible registrar el lote.")}finally{setSaving(false)}};
+  return <Modal title="Registrar lote" onClose={onClose}><div className="modal-body"><div className="form-grid"><label className="field wide"><span>Producto *</span><select value={form.productId} onChange={e=>setForm({...form,productId:e.target.value})}>{products.map(item=><option value={item.id} key={item.id}>{item.name}</option>)}</select></label><label className="field"><span>Número de lote *</span><input value={form.lotNumber} onChange={e=>setForm({...form,lotNumber:e.target.value})} placeholder="Ej. COMP-2026-01"/></label><label className="field"><span>Fecha de ingreso *</span><input type="date" value={form.receivedAt} onChange={e=>setForm({...form,receivedAt:e.target.value})}/></label><label className="field wide"><span>Fecha de vencimiento *</span><input type="date" value={form.expiresAt} onChange={e=>setForm({...form,expiresAt:e.target.value})}/></label></div>{error&&<div className="login-error modal-error"><Icon name="alert" size={16}/>{error}</div>}</div><div className="modal-foot"><Button variant="ghost" disabled={saving} onClick={onClose}>Cancelar</Button><Button disabled={saving} onClick={save}>{saving?"Guardando...":"Guardar lote"}</Button></div></Modal>;
 }
 
 function OrderModal({ onClose,onSaved }: { onClose:()=>void;onSaved:()=>void }) {
   const [catalogs,setCatalogs]=useState<any>({suppliers:[],products:[]});
-  const [form,setForm]=useState({supplierId:"",productId:"",quantity:"",unitPrice:"",notes:""});
+  const [supplierId,setSupplierId]=useState("");
+  const [notes,setNotes]=useState("");
+  const [lines,setLines]=useState([{productId:"",quantity:"1",unitPrice:""}]);
   const [error,setError]=useState("");
-  useEffect(()=>{api<any>("/catalogs").then(data=>{setCatalogs(data);setForm(current=>({...current,supplierId:String(data.suppliers[0]?.id || ""),productId:String(data.products[0]?.id || "")}))}).catch(e=>setError(e.message));},[]);
-  const save=async()=>{try{await api("/orders",{method:"POST",body:JSON.stringify({supplierId:Number(form.supplierId),notes:form.notes,items:[{productId:Number(form.productId),quantity:Number(form.quantity),unitPrice:Number(form.unitPrice)}]})});onSaved();onClose()}catch(caught){setError(caught instanceof Error?caught.message:"No fue posible crear la orden.")}};
-  return <Modal title="Nueva orden de compra" onClose={onClose}><div className="modal-body"><div className="form-grid"><label className="field wide"><span>Proveedor</span><select value={form.supplierId} onChange={e=>setForm({...form,supplierId:e.target.value})}>{catalogs.suppliers.map((item:any)=><option value={item.id} key={item.id}>{item.name}</option>)}</select></label><label className="field wide"><span>Producto</span><select value={form.productId} onChange={e=>setForm({...form,productId:e.target.value})}>{catalogs.products.map((item:any)=><option value={item.id} key={item.id}>{item.name}</option>)}</select></label><label className="field"><span>Cantidad</span><input type="number" min="1" value={form.quantity} onChange={e=>setForm({...form,quantity:e.target.value})}/></label><label className="field"><span>Precio unitario</span><input type="number" min="0" value={form.unitPrice} onChange={e=>setForm({...form,unitPrice:e.target.value})}/></label><label className="field wide"><span>Notas</span><textarea value={form.notes} onChange={e=>setForm({...form,notes:e.target.value})}/></label></div>{error&&<div className="login-error modal-error"><Icon name="alert" size={16}/>{error}</div>}</div><div className="modal-foot"><Button variant="ghost" onClick={onClose}>Cancelar</Button><Button onClick={save}>Crear orden</Button></div></Modal>;
+  const [saving,setSaving]=useState(false);
+  useEffect(()=>{api<any>("/catalogs").then(data=>{setCatalogs(data);setSupplierId(String(data.suppliers[0]?.id||""));setLines([{productId:String(data.products[0]?.id||""),quantity:"1",unitPrice:""}])}).catch(e=>setError(e.message));},[]);
+  const updateLine=(index:number,key:string,value:string)=>setLines(current=>current.map((line,lineIndex)=>lineIndex===index?{...line,[key]:value}:line));
+  const total=lines.reduce((sum,line)=>sum+Number(line.quantity||0)*Number(line.unitPrice||0),0);
+  const save=async()=>{
+    if(!supplierId||!lines.length||lines.some(line=>!line.productId||Number(line.quantity)<=0||Number(line.unitPrice)<0||line.unitPrice==="")){setError("Selecciona un proveedor y completa cada producto con cantidad y precio válidos.");return}
+    if(new Set(lines.map(line=>line.productId)).size!==lines.length){setError("Cada producto puede aparecer una sola vez en la orden.");return}
+    setSaving(true);setError("");
+    try{await api("/orders",{method:"POST",body:JSON.stringify({supplierId:Number(supplierId),notes:notes.trim(),items:lines.map(line=>({productId:Number(line.productId),quantity:Number(line.quantity),unitPrice:Number(line.unitPrice)}))})});onSaved();onClose()}
+    catch(caught){setError(caught instanceof Error?caught.message:"No fue posible crear la orden.")}
+    finally{setSaving(false)}
+  };
+  return <Modal title="Nueva orden de compra" onClose={onClose}><div className="modal-body"><label className="field"><span>Proveedor *</span><select value={supplierId} onChange={e=>setSupplierId(e.target.value)}>{catalogs.suppliers.map((item:any)=><option value={item.id} key={item.id}>{item.name}</option>)}</select></label><div className="order-lines-head"><div><strong>Productos</strong><small>Agrega todos los insumos de esta orden.</small></div><Button variant="secondary" icon="plus" onClick={()=>setLines(current=>[...current,{productId:String(catalogs.products[0]?.id||""),quantity:"1",unitPrice:""}])}>Agregar producto</Button></div><div className="order-lines">{lines.map((line,index)=><div className="order-line" key={index}><label className="field"><span>Producto *</span><select value={line.productId} onChange={e=>updateLine(index,"productId",e.target.value)}>{catalogs.products.map((item:any)=><option value={item.id} key={item.id}>{item.name}</option>)}</select></label><label className="field"><span>Cantidad *</span><input type="number" min="0.01" step="0.01" value={line.quantity} onChange={e=>updateLine(index,"quantity",e.target.value)}/></label><label className="field"><span>Precio unitario *</span><input type="number" min="0" step="1" value={line.unitPrice} onChange={e=>updateLine(index,"unitPrice",e.target.value)}/></label><div className="line-total"><span>Subtotal</span><strong>{(Number(line.quantity||0)*Number(line.unitPrice||0)).toLocaleString("es-CL",{style:"currency",currency:"CLP"})}</strong></div>{lines.length>1&&<button className="icon-btn remove-line" aria-label="Quitar producto" onClick={()=>setLines(current=>current.filter((_,lineIndex)=>lineIndex!==index))}><Icon name="close"/></button>}</div>)}</div><div className="order-total"><span>Total estimado</span><strong>{total.toLocaleString("es-CL",{style:"currency",currency:"CLP"})}</strong></div><label className="field"><span>Notas</span><textarea value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Condiciones o comentarios para la compra"/></label>{error&&<div className="login-error modal-error"><Icon name="alert" size={16}/>{error}</div>}</div><div className="modal-foot"><Button variant="ghost" disabled={saving} onClick={onClose}>Cancelar</Button><Button disabled={saving} onClick={save}>{saving?"Creando orden...":"Crear orden"}</Button></div></Modal>;
 }
 
 function UserModal({ onClose,onSaved }: { onClose:()=>void;onSaved:()=>void }) {
   const [form,setForm]=useState({name:"",email:"",password:"",roleId:"2"});
   const [error,setError]=useState("");
-  const save=async()=>{try{await api("/users",{method:"POST",body:JSON.stringify({...form,roleId:Number(form.roleId)})});onSaved();onClose()}catch(caught){setError(caught instanceof Error?caught.message:"No fue posible crear el usuario.")}};
-  return <Modal title="Nuevo usuario" onClose={onClose}><div className="modal-body"><div className="form-grid"><label className="field"><span>Nombre completo</span><input value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/></label><label className="field"><span>Correo</span><input type="email" value={form.email} onChange={e=>setForm({...form,email:e.target.value})}/></label><label className="field"><span>Rol</span><select value={form.roleId} onChange={e=>setForm({...form,roleId:e.target.value})}><option value="1">Administrador</option><option value="2">Encargado de Bodega</option><option value="3">Comprador</option><option value="4">Auditor</option></select></label><label className="field"><span>Contraseña temporal</span><input type="password" value={form.password} onChange={e=>setForm({...form,password:e.target.value})}/></label></div>{error&&<div className="login-error modal-error"><Icon name="alert" size={16}/>{error}</div>}</div><div className="modal-foot"><Button variant="ghost" onClick={onClose}>Cancelar</Button><Button onClick={save}>Crear usuario</Button></div></Modal>;
+  const [saving,setSaving]=useState(false);
+  const save=async()=>{if(form.name.trim().length<3||!form.email.includes("@")||form.password.length<8){setError("Ingresa un nombre válido, un correo válido y una contraseña de al menos 8 caracteres.");return}setSaving(true);setError("");try{await api("/users",{method:"POST",body:JSON.stringify({...form,name:form.name.trim(),email:form.email.trim().toLowerCase(),roleId:Number(form.roleId)})});onSaved();onClose()}catch(caught){setError(caught instanceof Error?caught.message:"No fue posible crear el usuario.")}finally{setSaving(false)}};
+  const roleName=(["Administrador","Encargado de Bodega","Comprador","Auditor"] as Role[])[Number(form.roleId)-1];
+  return <Modal title="Nuevo usuario" onClose={onClose}><div className="modal-body"><div className="form-grid"><label className="field"><span>Nombre completo *</span><input value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/></label><label className="field"><span>Correo *</span><input type="email" value={form.email} onChange={e=>setForm({...form,email:e.target.value})}/></label><label className="field"><span>Rol *</span><select value={form.roleId} onChange={e=>setForm({...form,roleId:e.target.value})}><option value="1">Administrador</option><option value="2">Encargado de Bodega</option><option value="3">Comprador</option><option value="4">Auditor</option></select></label><label className="field"><span>Contraseña temporal *</span><input type="password" minLength={8} value={form.password} onChange={e=>setForm({...form,password:e.target.value})}/><small>Mínimo 8 caracteres.</small></label></div><div className="role-preview"><strong>Acceso de {roleName}</strong><p>{roleAccess[roleName].join(" · ")}</p></div>{error&&<div className="login-error modal-error"><Icon name="alert" size={16}/>{error}</div>}</div><div className="modal-foot"><Button variant="ghost" disabled={saving} onClick={onClose}>Cancelar</Button><Button disabled={saving} onClick={save}>{saving?"Creando...":"Crear usuario"}</Button></div></Modal>;
 }
 
 export default function App() {
@@ -545,7 +651,9 @@ export default function App() {
   const [modal, setModal] = useState<"product"|"movement"|"lot"|"order"|"user"|null>(null);
   const [query,setQuery]=useState("");
   const [dataVersion,setDataVersion]=useState(0);
+  const [alertCount,setAlertCount]=useState(0);
   const visibleNav = account ? nav.filter((item) => roleAccess[account.role].includes(item.label)) : [];
+  useEffect(()=>{if(account&&roleAccess[account.role].includes("Alertas"))api<any[]>("/alerts").then(rows=>setAlertCount(rows.filter(item=>item.status==="Pendiente").length)).catch(()=>{});},[account,dataVersion]);
 
   const logout = async () => {
     try { await api("/auth/logout",{method:"POST"}); } catch { /* La sesión local se cierra igualmente. */ }
@@ -562,7 +670,7 @@ export default function App() {
     if(page==="Productos") return <Products query={query} setQuery={setQuery} onAdd={()=>setModal("product")} canEdit={account.role==="Administrador"} version={dataVersion}/>;
     if(page==="Movimientos") return <Movements onAdd={()=>setModal("movement")} canEdit={["Administrador","Encargado de Bodega"].includes(account.role)} version={dataVersion}/>;
     if(page==="Lotes y vencimientos") return <Lots canEdit={["Administrador","Encargado de Bodega"].includes(account.role)} onAdd={()=>setModal("lot")} version={dataVersion}/>;
-    if(page==="Alertas") return <Alerts/>;
+    if(page==="Alertas") return <Alerts onChange={setAlertCount}/>;
     if(page==="Órdenes de compra") return <Orders onAdd={()=>setModal("order")} version={dataVersion}/>;
     if(page==="Reportes") return <Reports/>;
     if(page==="Usuarios") return <Users onAdd={()=>setModal("user")} version={dataVersion}/>;
@@ -574,7 +682,7 @@ export default function App() {
   return <div className="app-shell">
     <aside className={`sidebar ${sidebar?"open":""}`}>
       <div className="brand"><img src="/logo-clinica-maro.png" alt="Clínica Dental Maró"/></div>
-      <nav>{visibleNav.map(n=><button key={n.label} className={page===n.label?"active":""} onClick={()=>{setPage(n.label);setSidebar(false)}}><Icon name={n.icon}/><span>{n.label}</span>{n.count&&<i>{n.count}</i>}</button>)}</nav>
+      <nav>{visibleNav.map(n=><button key={n.label} className={page===n.label?"active":""} onClick={()=>{setPage(n.label);setSidebar(false)}}><Icon name={n.icon}/><span>{n.label}</span>{n.label==="Alertas"&&alertCount>0&&<i>{alertCount}</i>}</button>)}</nav>
       <div className="clinic-card"><span><Icon name="tooth"/></span><div><strong>Clínica Maró</strong><small>Temuco, Chile</small></div></div>
       <div className="profile"><span className="avatar">{account.initials}</span><div><strong>{account.name}</strong><small>{account.role}</small></div><button className="profile-logout" onClick={logout} aria-label="Cerrar sesión" title="Cerrar sesión"><Icon name="logout" size={18}/></button></div>
     </aside>

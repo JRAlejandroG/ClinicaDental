@@ -74,13 +74,29 @@ export function createApiRouter() {
   }));
 
   router.get("/dashboard", requirePermission("inventory.read"), asyncRoute(async (_req,res) => {
-    const [[products],[units],[low],[expiring]] = await Promise.all([
+    const [[products],[units],[low],[expiring],[alerts],[recent],[daily]] = await Promise.all([
       getPool().query("SELECT COUNT(*) total FROM products WHERE active=TRUE"),
       getPool().query("SELECT COALESCE(SUM(quantity),0) total FROM lots WHERE expires_at>=CURRENT_DATE"),
       getPool().query("SELECT COUNT(*) total FROM v_products_below_minimum"),
       getPool().query("SELECT COUNT(*) total FROM v_expiring_lots"),
+      getPool().query(
+        `SELECT a.id,a.alert_type type,a.message,p.name product,a.created_at createdAt
+         FROM alerts a JOIN products p ON p.id=a.product_id
+         WHERE a.status='Pendiente' ORDER BY a.created_at DESC LIMIT 3`
+      ),
+      getPool().query("SELECT * FROM v_movement_history ORDER BY created_at DESC LIMIT 5"),
+      getPool().query(
+        `SELECT DATE(created_at) day,
+         COALESCE(SUM(CASE WHEN movement_type IN ('Entrada','Ajuste positivo') THEN quantity ELSE 0 END),0) entries,
+         COALESCE(SUM(CASE WHEN movement_type IN ('Salida','Ajuste negativo','Anulación') THEN quantity ELSE 0 END),0) exits
+         FROM inventory_movements WHERE created_at>=DATE_SUB(CURRENT_DATE,INTERVAL 6 DAY)
+         GROUP BY DATE(created_at) ORDER BY day`
+      ),
     ]);
-    res.json({ products:products[0].total,units:units[0].total,low:low[0].total,expiring:expiring[0].total });
+    res.json({
+      products:products[0].total,units:units[0].total,low:low[0].total,expiring:expiring[0].total,
+      pendingAlerts:alerts.length,alerts,recent,daily,
+    });
   }));
 
   router.get("/products", requirePermission("inventory.read"), asyncRoute(async (_req,res) => {
