@@ -1,0 +1,345 @@
+Sistema de Gestión de Inventario para Insumos Clínicos
+Proyecto Integrado – Evaluación 1
+NOMBRE: Kadel Carrillo - Jeison Alejandro Retamal GómezCARRERA: Ingeniería en informáticaASIGNATURA: Proyecto integradoPROFESOR: Juan José Mir Castillo
+ 
+1 Introducción
+Una institución de salud requiere implementar un sistema informático que permita administrar de manera eficiente el inventario de insumos clínicos, asegurando la disponibilidad de productos, el control de vencimientos y la optimización del proceso de abastecimiento. El sistema debe entregar información actualizada en tiempo real sobre el stock existente y generar alertas automáticas que apoyen la toma de decisiones administrativas.
+2 Objetivo General
+Desarrollar un sistema de inventario que permita gestionar y controlar de manera eficiente los insumos clínicos, garantizando la disponibilidad de productos, reduciendo las pérdidas por vencimiento y mejorando la planificación de compras.
+3 Objetivos Específicos
+Registrar y mantener actualizado el stock de insumos clínicos.
+Controlar las entradas y salidas de productos en tiempo real.
+Configurar niveles mínimos de stock para cada producto.
+Gestionar las fechas de vencimiento de los insumos almacenados.
+Generar alertas automáticas por bajo stock y vencimientos próximos.
+Facilitar la generación de órdenes de compra para la reposición de productos.
+Mantener un historial completo de los movimientos realizados en el inventario.
+Proporcionar información confiable para apoyar la toma de decisiones administrativas.
+4 Alcance del Sistema
+El sistema permitirá:
+Registrar productos e insumos clínicos
+Modificar y consultar productos
+Desactivar productos
+Registrar ingresos y egresos
+Consultar el stock
+Registrar fechas de vencimiento por lote
+Generar alertas
+Crear órdenes de compra
+Consultar el historial de movimientos
+5 Requerimientos Funcionales
+5.1 RF01 – Gestión de Productos
+El sistema deberá permitir registrar, modificar, consultar y desactivar productos del inventario.
+5.2 RF02 – Control de Stock
+El sistema deberá actualizar automáticamente las existencias cada vez que se registre una entrada o salida de productos.
+5.3 RF03 – Stock Mínimo
+El sistema deberá permitir definir un stock mínimo para cada producto y monitorear su cumplimiento.
+5.4 RF04 – Registro de Vencimientos
+El sistema deberá almacenar y controlar la fecha de vencimiento de cada lote de productos.
+5.5 RF05 – Alertas de Bajo Stock
+El sistema deberá generar alertas cuando la cantidad disponible de un producto sea inferior al stock mínimo definido.
+5.6 RF06 – Alertas de Vencimiento
+El sistema deberá notificar cuando un producto esté próximo a vencer, según un período configurable.
+5.7 RF07 – Órdenes de Compra
+El sistema deberá generar órdenes de compra editables para la reposición de productos necesarios.
+5.8 RF08 – Historial de Movimientos
+El sistema deberá registrar todas las operaciones realizadas sobre el inventario, incluyendo ingresos, salidas, ajustes y anulaciones.
+5.9 RF09 – Consultas y Reportes
+El sistema deberá permitir consultar el stock actual, los productos bajo stock mínimo, los productos próximos a vencer, el historial de movimientos y las órdenes de compra emitidas.
+6 Requerimientos No Funcionales
+RNF01 – Seguridad
+El sistema deberá utilizar autenticación para permitir el acceso
+6.2 RNF02 – Disponibilidad
+Deberá estar disponible durante el horario operativo de la institución
+6.3 RNF03 – Usabilidad
+La interfaz deberá ser intuitiva y fácil de utilizar por personal administrativo y clínico.
+6.4 RNF04 – Rendimiento
+Las consultas de inventario deberán responder en menos de 3 segundos.
+6.5 RNF05 – Integridad de Datos
+Toda transacción deberá registrarse garantizando la consistencia y auditoría de la información.
+7 Actores del Sistema
+Actor
+Descripción
+Administrador
+Gestiona usuarios, productos y configuraciones del sistema.
+Encargado de Bodega
+Registra entradas, salidas y controla el inventario.
+Comprador
+Gestiona las órdenes de compra generadas por el sistema.
+Auditor
+Consulta reportes e historial de movimientos.
+8 Diagramas
+8.1 Diagrama de Casos de Uso
+Figura 1. Diagrama de casos de uso del sistema.
+8.2 Diagrama de Clases
+Figura 2. Diagrama de clases del sistema.
+8.3 Diseño Físico de la Base de Datos
+Figura 3. Modelo físico de la base de datos.
+8.4 Diagrama de Componentes
+Figura 4. Diagrama de componentes de la arquitectura.
+9 Arquitectura de Software
+9.1 Tecnologías Propuestas
+Frontend: HTML, CSS y JavaScript.
+Backend: Node.js.
+Herramienta de desarrollo: Visual Studio Code.
+Control de versiones: Git.
+9.2 Arquitectura de 3 Capas
+Presentación: interfaz del sistema.
+Lógica: procesa inventario, alertas y compras.
+Datos: almacena la información.
+9.3 Metodología de Desarrollo
+Se utilizará la metodología ágil Scrum, organizando el trabajo en sprints e iterando sobre el backlog inicial definido para el proyecto.
+10 Solución Propuesta
+Crear un sistema de web que permite controlar productos, stock, vencimientos, alertas, movimientos y órdenes de compra
+11 Backlog Inicial
+1. Crear una base de datos.2. Crear usuarios.3. Gestionar productos.4. Implementar entradas y salidas de inventario.5. Implementar actualización automática del stock.6. Agregar el stock mínimo.7. Agregar registro de lotes y vencimientos.8. Crear alertas de bajo stock y vencimiento.9. Crear órdenes de compra.10. Crear historial de movimientos.11. Crear consultas y reportes.12. Realizar pruebas y corregir errores.
+12 Tiempos Estimados del Desarrollo
+Se estima un desarrollo de aproximadamente 60 a 70 horas, distribuidas en 6 a 7 semanas de trabajo.
+PARTE 2
+13 Cronograma de Trabajo
+Para organizar el trabajo utilizamos la metodología ágil Scrum, dividiendo el proyecto en sprints. El Sprint 0 agrupa las tareas de diseño y planificación que exige la Unidad 2 (cronograma, arquitectura, modelo de base de datos, interfaces, estándares de seguridad y plan de pruebas), mientras que los sprints siguientes corresponden a la construcción del sistema propiamente tal.
+Como el equipo está formado por dos integrantes, las tareas se repartieron según la naturaleza de cada una. El diseño de las interfaces de usuario (pantallas del sistema, punto 2.1.3 de la pauta) estuvo a cargo de Jeison Retamal, y se documenta más adelante en la sección 15. El resto de los puntos de esta unidad –cronograma, arquitectura, modelo de base de datos, estándares de seguridad y plan de pruebas– fueron desarrollados por Kadel Carrillo. En la carta Gantt y en la tabla de dependencias se identifica el responsable de cada tarea.
+13.1 Carta Gantt
+Figura 5. Carta Gantt del proyecto
+13.2 Dependencias y Prioridades entre Tareas
+En la siguiente tabla se indica, para cada tarea del cronograma, de qué otra u otras tareas depende y quién es el responsable de ejecutarla.
+Tarea
+Depende de
+Responsable
+Elaborar cronograma de trabajo
+Requerimientos (Evaluación 1)
+Kadel Carrillo
+Diseñar arquitectura 4+1
+Requerimientos (Evaluación 1)
+Kadel Carrillo
+Diseñar modelo de base de datos
+Requerimientos (Evaluación 1)
+Kadel Carrillo
+Diseñar interfaces de usuario (pantallas)
+Requerimientos (Evaluación 1)
+Jeison Retamal
+Definir estándares de programación segura
+Arquitectura 4+1
+Kadel Carrillo
+Elaborar plan de pruebas
+Requerimientos + Arquitectura
+Kadel Carrillo
+Montar base de datos (script SQL)
+Diseño del modelo de BD
+Kadel Carrillo
+Crear usuarios y autenticación
+Base de datos montada
+Kadel Carrillo
+Gestionar productos (CRUD)
+Base de datos montada
+Ambos
+Entradas/salidas de inventario
+Gestión de productos
+Ambos
+Stock mínimo y actualización automática
+Entradas/salidas de inventario
+Kadel Carrillo
+Registro de lotes y vencimientos
+Gestión de productos
+Jeison Retamal
+Alertas de bajo stock y vencimiento
+Stock mínimo + Vencimientos
+Kadel Carrillo
+Órdenes de compra
+Alertas de bajo stock
+Jeison Retamal
+Historial de movimientos
+Entradas/salidas de inventario
+Kadel Carrillo
+Consultas y reportes
+Historial + Órdenes de compra
+Ambos
+Pruebas unitarias, integrales y de rendimiento
+Módulos funcionales completos
+Ambos
+Corrección de errores y entrega final
+Resultados del plan de pruebas
+Ambos
+.
+14 Arquitectura de la Solución – Modelo 4+1
+Para documentar la arquitectura utilizamos el modelo de vistas 4+1 propuesto por Kruchten, que permite describir el sistema desde cinco perspectivas distintas y complementarias: lógica, de desarrollo, de procesos, física y de escenarios. En conjunto, estas vistas muestran tanto la infraestructura tecnológica que necesita el sistema como la forma en que está organizado internamente el software. Esta sección, al igual que el cronograma, fue desarrollada por Kadel Carrillo.
+14.1 Vista Lógica
+Esta vista muestra cómo descompusimos el sistema en paquetes funcionales y de qué manera se relacionan entre sí, desde la interfaz hasta el acceso a los datos.
+Figura 6. Vista lógica del sistema.
+14.2 Vista de Desarrollo
+Esta vista describe cómo se organizará el código fuente en capas y carpetas, y muestra las dependencias que existen entre los distintos módulos al momento de implementar el sistema.
+Figura 7. Vista de desarrollo (organización del código fuente).
+14.3 Vista de Procesos
+Aquí se representa el comportamiento del sistema en tiempo de ejecución: por un lado, el flujo síncrono de las peticiones que realiza el cliente y, por otro, el proceso asíncrono que corre en segundo plano revisando el stock y los vencimientos para generar las alertas correspondientes.
+Figura 8. Vista de procesos.
+14.4 Vista Física
+Esta vista muestra la infraestructura tecnológica sobre la que se despliega el sistema dentro de la red institucional: los equipos cliente, el servidor de aplicación, el servidor de base de datos y la tarea programada encargada de generar las alertas.
+Figura 9. Vista física (despliegue).
+14.5 Vista de Escenarios (+1)
+La vista de escenarios corresponde a los casos de uso del sistema, ya presentados en la Figura 1, y permite comprobar que las cuatro vistas anteriores sean coherentes entre sí. A modo de ejemplo, describimos a continuación dos escenarios representativos del funcionamiento del sistema:
+Escenario 1: un producto baja del stock mínimo. El Encargado de Bodega registra una salida de inventario, lo que en la vista de procesos corresponde al flujo síncrono entre cliente y servidor. El módulo de Control de Stock, definido en la vista lógica, detecta que la cantidad disponible quedó por debajo del mínimo y guarda ese cambio a través del paquete de acceso a datos. Más tarde, la tarea programada –presente tanto en la vista de procesos como en la vista física– revisa la base de datos y genera una alerta, que el Comprador podrá ver la próxima vez que inicie sesión.
+Escenario 2: un lote está próximo a vencer. El módulo de Vencimientos y Lotes, parte de la vista lógica, almacena la fecha de vencimiento de cada lote a través del módulo /models descrito en la vista de desarrollo. La tarea programada, desplegada en el servidor institucional según la vista física, identifica los lotes que están por vencer según el período configurado y genera una alerta automática, visible tanto para el Encargado de Bodega como para el Auditor.
+15 Interfaces de Usuario (Pantallas)
+Esta sección corresponde al punto 2.1.3 de la pauta y fue desarrollada por Jeison Retamal, quien estuvo a cargo del diseño visual de las pantallas del sistema (ver responsable en la sección 13.2)
+Pendiente
+16 Modelo de Base de Datos
+Esta sección corresponde al punto 2.1.4 de la pauta y fue desarrollada por Kadel Carrillo (ver responsable en la sección 13.2). A partir del modelo presentado en la Evaluación 1 (Figura 3), revisamos las entidades y relaciones, corregimos las debilidades que detectamos y montamos la base de datos en un servidor local, cargándola con datos de prueba para comprobar que funciona de acuerdo con los requerimientos del sistema.
+16.1 Motor de Base de Datos
+Para la parte estructurada elegimos MySQL (MariaDB en el entorno XAMPP), administrado mediante phpMyAdmin. Las razones de esta elección son las siguientes:
+Criterio
+Justificación
+Consistencia de los datos
+El motor InnoDB trabaja con transacciones ACID, lo que asegura que el stock nunca quede en un estado intermedio si una operación falla (RNF05).
+Reglas de negocio en la BD
+Soporta claves foráneas, restricciones CHECK, triggers, vistas y procedimientos almacenados, que usamos para proteger el inventario aunque la aplicación tenga un error.
+Integración con el backend
+Se conecta con Node.js mediante la librería mysql2, que permite consultas parametrizadas para prevenir inyección SQL.
+Costo y despliegue
+Es gratuito y de código abierto, y la base puede trasladarse sin cambios desde el entorno local al servidor institucional descrito en la vista física (Figura 9).
+Conocimiento del equipo
+Ambos integrantes lo hemos utilizado en asignaturas anteriores, lo que reduce la curva de aprendizaje.
+16.2 Modelo Relacional
+El modelo final quedó compuesto por 13 tablas. En la siguiente figura se muestran sus relaciones, y en la tabla se resume el propósito de cada una y el requerimiento al que responde. 
+Figura 10. Modelo relacional de la base de datos.
+Tabla
+Descripción
+Req.
+usuario
+Personas que acceden al sistema, con su rol, contraseña cifrada y control de bloqueo.
+RNF01
+rol
+Perfiles del sistema: Administrador, Encargado de Bodega, Comprador y Auditor.
+RNF01
+permiso
+Acciones que se pueden autorizar dentro del sistema.
+RNF01
+rol_permiso
+Asigna permisos a cada rol (relación N:M).
+RNF01
+configuracion
+Parámetros ajustables, como los días de anticipación para alertar vencimientos.
+RF06
+categoria
+Clasificación de los insumos clínicos.
+RF01
+producto
+Insumos del inventario, con su código, unidad de medida y stock mínimo.
+RF01, RF03
+proveedor
+Empresas a las que se emiten órdenes de compra.
+RF07
+lote
+Cada ingreso de un producto, con su fecha de vencimiento y cantidad disponible.
+RF02, RF04
+movimiento_inventario
+Registro de entradas, salidas, ajustes y anulaciones.
+RF02, RF08
+orden_compra
+Encabezado de la orden: proveedor, comprador, fecha y estado.
+RF07
+detalle_orden_compra
+Productos, cantidades y precios de cada orden (relación N:M).
+RF07
+alerta
+Avisos de bajo stock y de vencimiento, con su estado de revisión.
+RF05, RF06
+16.3 Mejoras Respecto al Modelo de la Evaluación 1
+Al revisar el modelo inicial frente a los requerimientos encontramos algunas limitaciones, que corregimos de la siguiente forma:
+Problema detectado
+Solución aplicada
+Cada orden de compra solo podía incluir un producto.
+Se creó la tabla detalle_orden_compra, que permite varios productos por orden.
+El rol del usuario era un texto libre, sin permisos asociados.
+Se crearon las tablas rol, permiso y rol_permiso para controlar qué puede hacer cada perfil.
+El período para alertar vencimientos no se podía configurar (RF06).
+Se creó la tabla configuracion, donde el administrador define ese valor.
+La categoría del producto era texto, con riesgo de datos inconsistentes.
+Se creó la tabla categoria, relacionada con producto.
+No se registraba el motivo de ajustes ni qué movimiento se anulaba.
+Se agregaron los campos motivo e id_movimiento_ref en movimiento_inventario.
+El producto no tenía un código de negocio ni unidad de medida.
+Se agregaron los campos codigo (único) y unidad_medida.
+No existía protección contra intentos repetidos de inicio de sesión.
+Se agregaron los campos intentos_fallidos y bloqueado_hasta en usuario.
+16.4 Integridad de los Datos
+Todas las tablas cuentan con una clave primaria autoincremental y las relaciones se implementan con claves foráneas, de modo que no es posible, por ejemplo, registrar un movimiento de un producto inexistente. Además, definimos restricciones UNIQUE para los datos que no pueden repetirse (correo del usuario, código del producto, RUT del proveedor y número de lote dentro de un mismo producto) y restricciones CHECK que impiden cantidades negativas, estados no permitidos o lotes cuya fecha de vencimiento sea anterior a la de ingreso.
+Para cumplir el tiempo de respuesta exigido en el RNF04, agregamos índices sobre los campos más consultados: la fecha de vencimiento de los lotes, la fecha de los movimientos y el estado de las alertas. Por otra parte, los productos, usuarios y proveedores nunca se eliminan, sino que se desactivan mediante su campo estado, con lo que se conserva el historial completo del inventario.
+16.5 Lógica Implementada en la Base de Datos
+Además de las tablas, incorporamos en la base de datos las reglas más importantes del negocio, para que se cumplan siempre, independientemente de la aplicación que acceda a ella:
+Objeto
+Tipo
+Función
+trg_movimiento_bi
+Trigger
+Antes de registrar un movimiento, valida que el lote corresponda al producto, que haya stock suficiente y que los ajustes tengan motivo. Luego actualiza automáticamente la cantidad del lote (RF02).
+trg_movimiento_bu / trg_movimiento_bd
+Trigger
+Impiden modificar o eliminar movimientos, de modo que el historial funciona como registro de auditoría (RNF05).
+v_stock_actual
+Vista
+Calcula el stock total y el disponible (sin lotes vencidos) de cada producto.
+v_productos_bajo_minimo
+Vista
+Lista los productos cuyo stock disponible es inferior al mínimo (RF05, RF09).
+v_lotes_por_vencer
+Vista
+Lista los lotes que vencen dentro del período configurado (RF06, RF09).
+v_historial_movimientos
+Vista
+Muestra el historial con nombres legibles de producto, lote y usuario (RF08).
+sp_generar_alertas
+Procedimiento
+Genera las alertas de bajo stock y vencimiento sin duplicar las pendientes. Es el que ejecuta la tarea programada de la vista de procesos (Figura 8).
+Con este diseño, el stock nunca se modifica directamente: un lote se crea con cantidad cero y su cantidad cambia únicamente mediante movimientos. Si un movimiento se registró por error, no se borra, sino que se registra una anulación que revierte su efecto y queda asociada al movimiento original. Así, el inventario siempre puede reconstruirse a partir del historial.
+16.6 Seguridad en la Base de Datos
+Las contraseñas se almacenan como hash generado con bcrypt, nunca en texto plano, y la cuenta se bloquea temporalmente tras cinco intentos fallidos (valores definidos en la tabla configuracion). La aplicación se conecta a la base con un usuario propio, inventario_app, que solo tiene permisos de lectura, inserción, actualización y ejecución de procedimientos, pero no de eliminación, aplicando el principio de mínimo privilegio.
+Los permisos de cada rol quedaron cargados en la base de datos según la siguiente matriz, que se desarrolla con mayor detalle en la sección de estándares de programación segura:
+Permiso
+Admin.
+Bodega
+Comprador
+Auditor
+Gestionar usuarios
+✓
+Gestionar productos
+✓
+Consultar productos y stock
+✓
+✓
+✓
+✓
+Registrar movimientos
+✓
+✓
+Anular movimientos
+✓
+Gestionar órdenes de compra
+✓
+✓
+Ver alertas
+✓
+✓
+✓
+✓
+Ver reportes e historial
+✓
+✓
+Modificar configuración
+✓
+16.7 Base de Datos Montada
+El script de creación se ejecutó en phpMyAdmin, completando sus 53 consultas sin errores. Para probar el funcionamiento cargamos datos de ejemplo: cuatro usuarios (uno por cada rol), cinco productos, dos proveedores, cinco lotes, diez movimientos de inventario y una orden de compra con dos productos. A continuación se presentan los resultados obtenidos.
+Figura 11. Consulta del stock actual por producto.
+El stock se obtiene automáticamente a partir de los movimientos. Por ejemplo, la gasa estéril tuvo una entrada de 120 unidades y una salida de 40, quedando en 80; la jeringa tuvo una entrada de 500 y un ajuste negativo de 5 por unidades dañadas, quedando en 495.
+Figura 12. Productos bajo el stock mínimo.
+Solo el suero fisiológico aparece bajo el mínimo, con 25 unidades frente a un mínimo de 40. La mascarilla quirúrgica no aparece, porque su salida de 12 unidades fue anulada y su stock volvió a 25, sobre el mínimo de 15.
+Figura 13. Lotes próximos a vencer.
+El lote GN-2026-03 de guantes de nitrilo vence en 20 días, dentro del período de 30 días definido en la configuración, por lo que se considera próximo a vencer.
+Figura 14. Historial de movimientos del inventario.
+El historial registra cada operación con su tipo, lote, cantidad, usuario responsable y motivo. El movimiento 10 corresponde a la anulación del movimiento 8, lo que se indica en la columna id_movimiento_ref.
+Figura 15. Alertas generadas por el procedimiento sp_generar_alertas.
+El procedimiento generó dos alertas pendientes, que coinciden con los resultados de las Figuras 12 y 13: una de bajo stock para el suero fisiológico y otra de vencimiento para el lote de guantes.
+Figura 16. Rechazo de una salida mayor al stock disponible.
+Al intentar registrar una salida de 999 unidades de un lote que tiene 30, el trigger rechaza la operación con el mensaje «Stock insuficiente en el lote» y el stock no se modifica
+ 
+Figura 17. Bloqueo de la eliminación de movimientos.
+Del mismo modo, al intentar eliminar un movimiento la base de datos lo impide y solicita registrar una anulación, lo que asegura que el historial no pueda alterarse.
+16.8 Base de Datos No Estructurada
